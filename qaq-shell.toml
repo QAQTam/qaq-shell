@@ -1,0 +1,27 @@
+# QAQ-Shell 应用配置
+# 放在 qaq-shell.exe 同目录下即可自动加载
+# %SYSTEMDRIVE% 等环境变量会自动展开
+
+[[apps]]
+name = "命令提示符"
+exec = "%SYSTEMDRIVE%\\Windows\\System32\\cmd.exe"
+
+[[apps]]
+name = "DiskGenius"
+exec = "X:\\Tools\\DiskGenius.exe"
+
+[[apps]]
+name = "WinNTSetup"
+exec = "X:\\Tools\\WinNTSetup\\WinNTSetup_x64.exe"
+
+[[apps]]
+name = "7-Zip"
+exec = "X:\\Tools\\7-Zip\\7zFM.exe"
+
+[[apps]]
+name = "Notepad3"
+exec = "X:\\Tools\\Notepad3\\Notepad3.exe"
+
+[[apps]]
+name = "Firefox"
+exec = "X:\\Tools\\Firefox\\firefox.exe"
