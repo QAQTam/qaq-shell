@@ -3,6 +3,14 @@ name = "qaq-shell"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "qaq-shell"
+path = "src/main.rs"
+
+[[bin]]
+name = "perfmon"
+path = "src/bin/perfmon.rs"
+
 [profile.release]
 opt-level = "s"
 lto = true
