@@ -3,6 +3,10 @@
 use egui::{Align, Align2, Color32, ColorImage, Context, FontData, FontDefinitions, FontFamily, FontId, Id, Layout, RichText, Sense, TextureHandle, Vec2};
 use std::os::windows::ffi::OsStrExt;
 use std::sync::Arc;
+
+mod widgets;
+use widgets::{ds, Scale, ShellWidget};
+
 use windows_sys::Win32::System::Time::{GetTimeZoneInformation, TIME_ZONE_INFORMATION};
 use windows_sys::Win32::Graphics::Gdi::{
     CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject, BITMAP,
@@ -11,8 +15,8 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     DestroyIcon, EnumWindows, GetIconInfo, GetMessageW, GetWindow, GetWindowLongW,
-    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW, ShowWindow,
-    ICONINFO, MSG, SW_MINIMIZE, SW_RESTORE, SW_SHOW, WM_CLOSE,
+    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW,
+    SetForegroundWindow, ShowWindow, ICONINFO, MSG, SW_MINIMIZE, SW_RESTORE, WM_CLOSE,
 };
 
 fn main() -> Result<(), eframe::Error> {
@@ -95,38 +99,6 @@ struct WindowInfo {
     title: String,
 }
 
-struct Scale {
-    dpi: f32,
-    th: f32,
-    bw: f32,
-    iw: f32,
-    is: f32,
-    fl: f32,
-    fm: f32,
-    fs: f32,
-    fd: f32,
-    fx: f32,
-    ww: f32,
-}
-
-impl Scale {
-    fn new(s: f32) -> Self {
-        Scale {
-            dpi: s,
-            th: (42.0 * s).round(),
-            bw: (48.0 * s).round(),
-            iw: (172.0 * s).round(),
-            is: (32.0 * s).round(),
-            fl: (18.0 * s).round(),
-            fm: (13.0 * s).round(),
-            fs: (10.0 * s).round(),
-            fd: (14.0 * s).round(),
-            fx: (12.0 * s).round(),
-            ww: (100.0 * s).round(),
-        }
-    }
-}
-
 struct ShellApp {
     clock: String,
     start_open: bool,
@@ -143,6 +115,8 @@ struct ShellApp {
     force_refresh: bool,
     desktop_ctx_pos: Option<egui::Pos2>,
     shutdown_confirm: bool,
+    widgets: Vec<Box<dyn ShellWidget>>,
+    active_widget: Option<usize>,
 }
 
 impl Default for ShellApp {
@@ -158,17 +132,13 @@ impl Default for ShellApp {
             icons_loaded: false,
             context_menu_hwnd: 0,
             context_menu_rect: None,
-            style: {
-                let mut v = egui::Visuals::dark();
-                v.widgets.inactive.bg_fill = Color32::from_rgba_unmultiplied(255, 255, 255, 8);
-                v.widgets.hovered.bg_fill = Color32::from_rgba_unmultiplied(255, 255, 255, 25);
-                v.widgets.active.bg_fill = Color32::from_rgba_unmultiplied(255, 255, 255, 40);
-                Arc::new(egui::Style { visuals: v, ..Default::default() })
-            },
+            style: ds(),
             win_event_rx: spawn_winevent_thread(),
             force_refresh: false,
             desktop_ctx_pos: None,
             shutdown_confirm: false,
+            widgets: vec![Box::new(widgets::perfmon::PerfMon::new())],
+            active_widget: None,
         }
     }
 }
@@ -427,12 +397,14 @@ fn merge_windows(old: &[WindowInfo], new: &[WindowInfo]) -> Vec<WindowInfo> {
 
 fn focus_window(hwnd: isize) {
     #[link(name = "user32")]
-    extern "system" { fn SwitchToThisWindow(hwnd: *mut std::ffi::c_void, fAltTab: i32); }
+    extern "system" {
+        fn AllowSetForegroundWindow(dwProcessId: u32) -> i32;
+    }
     unsafe {
         let h = hwnd as *mut std::ffi::c_void;
-        ShowWindow(h, SW_SHOW);
         if IsIconic(h) != 0 { ShowWindow(h, SW_RESTORE); }
-        SwitchToThisWindow(h, 1);
+        AllowSetForegroundWindow(0xFFFFFFFF);
+        SetForegroundWindow(h);
     }
 }
 
@@ -607,6 +579,10 @@ impl ShellApp {
                     ui.painter().rect_filled(egui::Rect::from_center_size(sr2.center(), Vec2::new(1.0, sep_h)), 0.0, sep_color);
 
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let pm_color = if self.active_widget.is_some() { Color32::from_rgb(100, 180, 255) } else { Color32::WHITE };
+                        if ui.add_sized([sc.bw, sc.th], egui::Button::new(RichText::new("📊").size(sc.fl).color(pm_color)).fill(Color32::TRANSPARENT)).clicked() {
+                            self.active_widget = if self.active_widget.is_some() { None } else { Some(0) };
+                        }
                         ui.label(RichText::new(&self.clock).color(Color32::WHITE).size(sc.fx));
                         if ui.add_sized([sc.bw, sc.th], egui::Button::new(RichText::new("\u{23FB}").size(sc.fl).color(Color32::RED)).fill(Color32::TRANSPARENT)).clicked() {
                             self.shutdown_confirm = true;
@@ -726,6 +702,12 @@ impl eframe::App for ShellApp {
         self.render_desktop(ctx, &sc, scr);
         self.render_taskbar(ctx, &sc, scr);
         self.render_start_menu(ctx, &sc, scr);
+
+        if let Some(idx) = self.active_widget {
+            let mut open = true;
+            self.widgets[idx].show(ctx, &sc, scr, &mut open);
+            if !open { self.active_widget = None; }
+        }
 
         if self.shutdown_confirm {
             let s = sc.dpi;
