@@ -76,4 +76,4 @@ PE has no Chromium/Node.js runtime. Native Rust keeps the binary under 3 MB with
 
 ## License
 
-MIT
+MIT OR Apache-2.0（`LICENSE-MIT` + `LICENSE-APACHE`，下游任选其一）
