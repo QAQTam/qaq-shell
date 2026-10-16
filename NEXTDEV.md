@@ -74,3 +74,31 @@ windows = { version = "0.62", features = [
     "Win32_Foundation",
 ]}
 ```
+
+## iced 迁移支线 (iced-shell/, 2026-10-17)
+
+egui/eframe-glow 在 WinRE/PE 里**不可用**: WinRE 无 opengl32.dll (连 GL 库都不存在),
+且无 api-ms-win-crt-* 转发器/vcruntime140.dll。对策已验证:
+
+- `iced-shell/` = egui 版的 iced (tiny-skia 软渲染) 迁移版, 零 GPU/GL 依赖,
+  静态 CRT, 3.9MB, 宿主机全屏运行验证通过 (桌面/图标/任务栏/开始菜单/时钟/关机)
+- CRT 必须静态: `.cargo/config.toml` → `+crt-static` (WinRE 只有 ucrtbase.dll)
+- 中文字体: 运行时读 msyh.ttc 字节 → `app.font(bytes)` → `text().font(Font::with_name("Microsoft YaHei"))`
+
+### iced 0.13 API 笔记 (egui→iced 迁移踩坑)
+- feature 体系: 无 `winit` feature; 用 `default-features=false, features=["tiny-skia","image","smol","system"]`
+- 常量: `DEFAULT_CHARSET`/`CLEARTYPE_QUALITY` 在 `wingdi`
+- `Border::with_radius` 不存在 → `Border { radius: R.into(), ..Default::default() }`
+- `button::Status` 无 `is_hovered()` → `matches!(st, Status::Hovered)`
+- 全屏: `Settings` 无 `fullscreen` 字段 → 启动 Task:
+  `window::get_latest().and_then(|id| window::change_mode::<Msg>(id, Mode::Fullscreen))`
+- `HINTERNET`/Win32 句柄非 Sync → 多线程下载每线程独立会话
+- `Padding` 无 `From<[f32;4]>` → `Padding::ZERO.top(f32)`
+- `text()` 无 `center_x` → `container(text).center_x(Fill)`
+- Stack 叠加层: `stack![base, overlay]`; 任务栏高度用 `Padding::ZERO.bottom(h)` 预留
+
+### 待办
+- [ ] WinRE 实机验证 iced 渲染 (VBox: X:\qaq-shell\iced-shell\iced-shell.exe)
+- [ ] winevent hook 精细化 (现为 1s 轮询枚举, 够用)
+- [ ] perfmon 迁移为 iced 窗口
+- [ ] 与 restore-win11 联动: 桌面图标「云下载重装」→ restore-app.exe (TOML 已配)

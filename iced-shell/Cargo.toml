@@ -1,0 +1,21 @@
+[package]
+name = "iced-shell"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = { version = "0.13", default-features = false, features = ["tiny-skia", "image", "smol", "system"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Time",
+    "Win32_System_Shutdown",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+panic = "abort"
